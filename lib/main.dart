@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
       home:
           Supabase.instance.client.auth.currentUser != null
               ? const HomePage()
-              : const LoginPage(),
+              : const HomePage(),
     );
   }
 }

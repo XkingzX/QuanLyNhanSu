@@ -21,7 +21,6 @@ class _HomePageState extends State<HomePage> {
     _checkAdminAccess();
   }
 
-  // Kiểm tra quyền admin
   Future<void> _checkAdminAccess() async {
     final isAdmin = await _authService.isAdmin();
     setState(() {
@@ -82,22 +81,8 @@ class _HomePageState extends State<HomePage> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    FutureBuilder<Map<String, dynamic>>(
-                      future: _authService.getUsers().then(
-                        (users) =>
-                            users.isNotEmpty
-                                ? users.firstWhere(
-                                  (u) =>
-                                      u['id'] ==
-                                      _authService.getCurrentUser()?.id,
-                                  orElse:
-                                      () => {
-                                        'full_name': 'Unknown',
-                                        'role': 'user',
-                                      },
-                                )
-                                : {'full_name': 'Unknown', 'role': 'user'},
-                      ),
+                    FutureBuilder<Map<String, dynamic>?>(
+                      future: _authService.getCurrentUserProfile(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {
@@ -122,7 +107,7 @@ class _HomePageState extends State<HomePage> {
                         }
                         final user = snapshot.data!;
                         return Text(
-                          'Tên người dùng: ${user['full_name'] ?? 'Unknown'} - ${_isAdmin ? "Admin" : "User"}',
+                          'Tên người dùng: ${user['full_name'] ?? 'Chưa đặt tên'} - ${_isAdmin ? "Admin" : "User"}',
                           style: const TextStyle(
                             color: Colors.cyanAccent,
                             fontSize: 14,
@@ -144,7 +129,7 @@ class _HomePageState extends State<HomePage> {
                 Navigator.pop(context);
               },
             ),
-            if (_isAdmin == false)
+            if (_isAdmin)
               ListTile(
                 leading: const Icon(Icons.person, color: Colors.indigoAccent),
                 title: const Text('Nhân viên'),
@@ -154,7 +139,7 @@ class _HomePageState extends State<HomePage> {
                   Navigator.pop(context);
                 },
               ),
-            if (_isAdmin == false)
+            if (_isAdmin)
               ListTile(
                 leading: const Icon(
                   Icons.admin_panel_settings,
@@ -203,6 +188,16 @@ class _HomePageState extends State<HomePage> {
                 Navigator.pop(context);
               },
             ),
+            if (_isAdmin)
+              ListTile(
+                leading: const Icon(Icons.list_alt, color: Colors.indigoAccent),
+                title: const Text('Danh sách lương'),
+                selected: _selectedMenu == 'Danh sách lương',
+                onTap: () {
+                  setState(() => _selectedMenu = 'Danh sách lương');
+                  Navigator.pop(context);
+                },
+              ),
             ListTile(
               leading: const Icon(
                 Icons.local_fire_department_outlined,
@@ -220,7 +215,7 @@ class _HomePageState extends State<HomePage> {
       ),
       body:
           _selectedMenu == 'Nhân viên'
-              ? (_isAdmin == false
+              ? (_isAdmin
                   ? const pageNhanVien()
                   : const Center(
                     child: Text('Bạn không có quyền truy cập mục này!'),
@@ -235,6 +230,8 @@ class _HomePageState extends State<HomePage> {
               ? const pageChamCong()
               : _selectedMenu == 'Lương'
               ? const pageLuong()
+              : _selectedMenu == 'Danh sách lương'
+              ? const pageSalaryList()
               : _selectedMenu == 'Phòng ban'
               ? const pagePhongBan()
               : Center(
@@ -290,10 +287,14 @@ class _pageTrangChuState extends State<pageTrangChu> {
   Future<void> _loadRecentLogins() async {
     try {
       final logins = await _authService.getRecentLogins();
+      print(
+        'Danh sách người dùng vừa đăng nhập (trong _loadRecentLogins): $logins',
+      );
       setState(() {
         _recentLogins = logins;
       });
     } catch (e) {
+      print('Lỗi khi tải danh sách đăng nhập: $e');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
@@ -302,11 +303,12 @@ class _pageTrangChuState extends State<pageTrangChu> {
 
   Future<void> _loadLatestNotification() async {
     try {
-      final message = await _authService.getLatestNotification();
+      final notifications = await _authService.getNotifications();
       setState(() {
         _latestNotification =
-            message ??
-            'Không có thông báo mới, chúc bạn một ngày làm việc tốt lành!';
+            notifications.isNotEmpty
+                ? notifications.first['message']
+                : 'Không có thông báo mới, chúc bạn một ngày làm việc tốt lành!';
       });
     } catch (e) {
       ScaffoldMessenger.of(
@@ -357,17 +359,6 @@ class _pageTrangChuState extends State<pageTrangChu> {
                   itemCount: _recentLogins.length,
                   itemBuilder: (context, index) {
                     final login = _recentLogins[index];
-                    final loginTime = DateTime.parse(login['login_time']);
-                    final timeDiff = DateTime.now().difference(loginTime);
-                    String timeAgo;
-                    if (timeDiff.inMinutes < 60) {
-                      timeAgo = '${timeDiff.inMinutes} phút trước';
-                    } else if (timeDiff.inHours < 24) {
-                      timeAgo = '${timeDiff.inHours} giờ trước';
-                    } else {
-                      timeAgo = '${timeDiff.inDays} ngày trước';
-                    }
-
                     return Card(
                       elevation: 2,
                       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -381,7 +372,7 @@ class _pageTrangChuState extends State<pageTrangChu> {
                           color: Colors.lightBlue,
                         ),
                         title: Text(
-                          timeAgo,
+                          login['time_ago'],
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -394,10 +385,13 @@ class _pageTrangChuState extends State<pageTrangChu> {
                         trailing: AnimatedOpacity(
                           opacity: 1.0,
                           duration: const Duration(milliseconds: 500),
-                          child: const Icon(
+                          child: Icon(
                             Icons.circle,
                             size: 10,
-                            color: Colors.green,
+                            color:
+                                login['time_ago'] == 'Vừa đăng nhập'
+                                    ? Colors.green
+                                    : Colors.red,
                           ),
                         ),
                       ),
@@ -426,6 +420,8 @@ class _pageNhanVienState extends State<pageNhanVien> {
   final _phoneNumberController = TextEditingController();
   bool _isLoading = false;
   List<Map<String, dynamic>> _users = [];
+  bool _isVerified = false;
+  bool _isButtonEnabled = true;
 
   @override
   void initState() {
@@ -450,7 +446,12 @@ class _pageNhanVienState extends State<pageNhanVien> {
   }
 
   Future<void> _addUser() async {
-    setState(() => _isLoading = true);
+    if (!_isButtonEnabled) return;
+
+    setState(() {
+      _isButtonEnabled = false;
+    });
+
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final fullName = _fullNameController.text.trim();
@@ -462,7 +463,7 @@ class _pageNhanVienState extends State<pageNhanVien> {
           content: Text('Vui lòng điền đầy đủ email, mật khẩu và họ tên'),
         ),
       );
-      setState(() => _isLoading = false);
+      setState(() => _isButtonEnabled = true);
       return;
     }
 
@@ -481,13 +482,17 @@ class _pageNhanVienState extends State<pageNhanVien> {
       _passwordController.clear();
       _fullNameController.clear();
       _phoneNumberController.clear();
+      setState(() => _isVerified = false); // Reset checkbox
       await _loadUsers();
     } else {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Lỗi: $result')));
     }
-    setState(() => _isLoading = false);
+
+    // Delay 30 giây trước khi cho phép thêm lần tiếp theo
+    await Future.delayed(const Duration(seconds: 30));
+    setState(() => _isButtonEnabled = true);
   }
 
   Future<void> _editUser(Map<String, dynamic> user) async {
@@ -544,9 +549,7 @@ class _pageNhanVienState extends State<pageNhanVien> {
                                 });
                               },
                             ),
-                            const Text(
-                              'Vai trò: Admin (nếu không chọn là User)',
-                            ),
+                            const Text('Vai trò: Admin'),
                           ],
                         ),
                       ],
@@ -702,8 +705,22 @@ class _pageNhanVienState extends State<pageNhanVien> {
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 16),
+              Row(
+                children: [
+                  Checkbox(
+                    value: _isVerified,
+                    onChanged: (value) {
+                      setState(() {
+                        _isVerified = value ?? false;
+                      });
+                    },
+                  ),
+                  const Text('Xác Minh'),
+                ],
+              ),
+              const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: _isLoading ? null : _addUser,
+                onPressed: _isButtonEnabled ? _addUser : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo,
                   foregroundColor: Colors.indigoAccent,
@@ -757,6 +774,10 @@ class _pageNhanVienState extends State<pageNhanVien> {
                               SelectableText(
                                 'Vai trò: ${user['role'] == 'admin' ? 'Admin' : 'User'}',
                               ),
+                              if (user['is_verified'] != null)
+                                SelectableText(
+                                  'Trạng thái: ${user['is_verified'] ? 'Đã xác minh' : 'Chưa xác minh'}',
+                                ),
                             ],
                           ),
                           trailing: Row(
@@ -781,7 +802,7 @@ class _pageNhanVienState extends State<pageNhanVien> {
                                         (context) => AlertDialog(
                                           title: const Text('Xác nhận xóa'),
                                           content: Text(
-                                            'Bạn có chắc muốn xóa nhân viên ${user['full_name'] ?? 'Unknown'}?',
+                                            'Bạn có chắc muốn xóa nhân viên ${user['full_name'] ?? 'Chưa đặt tên'}?',
                                           ),
                                           actions: [
                                             TextButton(
@@ -837,29 +858,9 @@ class pageThongTinCaNhan extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authService = AuthService();
-    final user = authService.getCurrentUser();
 
-    return FutureBuilder<Map<String, dynamic>>(
-      future: authService.getUsers().then(
-        (users) =>
-            users.isNotEmpty
-                ? users.firstWhere(
-                  (u) => u['id'] == user?.id,
-                  orElse:
-                      () => {
-                        'full_name': 'Không tìm thấy',
-                        'email': '',
-                        'phone_number': '',
-                        'role': 'user',
-                      },
-                )
-                : {
-                  'full_name': 'Không tìm thấy',
-                  'email': '',
-                  'phone_number': '',
-                  'role': 'user',
-                },
-      ),
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: authService.getCurrentUserProfile(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -902,6 +903,10 @@ class pageThongTinCaNhan extends StatelessWidget {
                       SelectableText(
                         'Vai trò: ${profile['role'] == 'admin' ? 'Admin' : 'User'}',
                       ),
+                      if (profile['is_verified'] != null)
+                        SelectableText(
+                          'Trạng thái: ${profile['is_verified'] ? 'Đã xác minh' : 'Chưa xác minh'}',
+                        ),
                     ],
                   ),
                 ),
@@ -924,6 +929,26 @@ class pageBaoCaoThongBao extends StatefulWidget {
 class _pageBaoCaoThongBaoState extends State<pageBaoCaoThongBao> {
   final AuthService _authService = AuthService();
   final TextEditingController _notificationController = TextEditingController();
+  List<Map<String, dynamic>> _notifications = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final notifications = await _authService.getNotifications();
+      setState(() {
+        _notifications = notifications;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
 
   Future<void> _saveNotification() async {
     final message = _notificationController.text.trim();
@@ -934,16 +959,17 @@ class _pageBaoCaoThongBaoState extends State<pageBaoCaoThongBao> {
       return;
     }
 
-    final error = await _authService.saveNotification(message);
-    if (error == null) {
+    try {
+      await _authService.addNotification(message);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Thêm thông báo thành công!')),
       );
       _notificationController.clear();
-    } else {
+      await _loadNotifications();
+    } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi: $error')));
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
@@ -984,6 +1010,37 @@ class _pageBaoCaoThongBaoState extends State<pageBaoCaoThongBao> {
               foregroundColor: Colors.white,
             ),
             child: const Text('Lưu thông báo'),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Danh sách Thông Báo',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.indigo,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child:
+                _notifications.isEmpty
+                    ? const Center(child: Text('Chưa có thông báo nào'))
+                    : ListView.builder(
+                      itemCount: _notifications.length,
+                      itemBuilder: (context, index) {
+                        final notification = _notifications[index];
+                        return Card(
+                          elevation: 4,
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: ListTile(
+                            title: Text(notification['message']),
+                            subtitle: Text(
+                              'Ngày tạo: ${DateTime.parse(notification['created_at']).toLocal().toString()}',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -1035,6 +1092,10 @@ class _pageBaoCaoThongBaoState extends State<pageBaoCaoThongBao> {
                                 'Số điện thoại: ${admin['phone_number'] ?? 'Chưa có'}',
                               ),
                               const SelectableText('Vai trò: Admin'),
+                              if (admin['is_verified'] != null)
+                                SelectableText(
+                                  'Trạng thái: ${admin['is_verified'] ? 'Đã xác minh' : 'Chưa xác minh'}',
+                                ),
                             ],
                           ),
                         ),
@@ -1088,22 +1149,22 @@ class _pageChamCongState extends State<pageChamCong> {
   }
 
   Future<void> _recordTime() async {
-    final now = DateTime.now();
-    final checkInTime = DateTime(now.year, now.month, now.day, 8, 0);
-    final checkOutTime = DateTime(now.year, now.month, now.day, 17, 30);
+    final now = DateTime.now().toUtc();
+    final checkInTime =
+        DateTime(now.year, now.month, now.day, 8, 0, 0, 0, 0).toUtc();
+    final checkOutTime =
+        DateTime(now.year, now.month, now.day, 17, 30, 0, 0, 0).toUtc();
     int lateMinutes = 0;
     int earlyMinutes = 0;
     String message =
         _isCheckedIn ? 'Check-out thành công!' : 'Check-in thành công!';
 
     if (!_isCheckedIn) {
-      // Check-in logic
       if (now.isAfter(checkInTime)) {
         lateMinutes = now.difference(checkInTime).inMinutes;
         message = 'Check-in thành công! Bạn đã đi muộn $lateMinutes phút.';
       }
     } else {
-      // Check-out logic
       if (now.isBefore(checkOutTime)) {
         earlyMinutes = checkOutTime.difference(now).inMinutes;
         message =
@@ -1191,20 +1252,243 @@ class _pageChamCongState extends State<pageChamCong> {
   }
 }
 
-class pageLuong extends StatelessWidget {
+class pageLuong extends StatefulWidget {
   const pageLuong({super.key});
 
   @override
+  State<pageLuong> createState() => _pageLuongState();
+}
+
+class _pageLuongState extends State<pageLuong> {
+  final AuthService _authService = AuthService();
+  Map<String, dynamic> _userSalary = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSalary();
+  }
+
+  Future<void> _loadUserSalary() async {
+    try {
+      final user = _authService.getCurrentUser();
+      if (user == null) {
+        setState(() {
+          _userSalary = {};
+        });
+        return;
+      }
+      final salary = await _authService.getUserSalary(user.id);
+      setState(() {
+        _userSalary = salary;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(body: Center(child: Text("Lương")));
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Thông tin lương'),
+        backgroundColor: Colors.green,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Thông tin Lương',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _userSalary.isEmpty
+                ? const Center(child: Text('Chưa có dữ liệu lương'))
+                : Card(
+                  elevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Họ và tên: ${_userSalary['full_name'] ?? 'Chưa đặt tên'}',
+                        ),
+                        Text('Email: ${_userSalary['email'] ?? 'No email'}'),
+                        Text('Phòng: ${_userSalary['role'] ?? 'Chưa đặt tên'}'),
+                        Text(
+                          'Lương cơ bản: ${_userSalary['base_salary']?.toStringAsFixed(0) ?? '0'} VND',
+                        ),
+                        Text('Số ngày công: ${_userSalary['work_days'] ?? 0}'),
+                        Text(
+                          'Phạt muộn: ${_userSalary['late_penalty'] > 0 ? '200,000 VND' : '0 VND'}',
+                        ),
+                        Text(
+                          'Tổng lương: ${_userSalary['total_salary']?.toStringAsFixed(0) ?? '0'} VND',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class pageSalaryList extends StatefulWidget {
+  const pageSalaryList({super.key});
+
+  @override
+  State<pageSalaryList> createState() => _pageSalaryListState();
+}
+
+class _pageSalaryListState extends State<pageSalaryList> {
+  final AuthService _authService = AuthService();
+  List<Map<String, dynamic>> _usersWithSalary = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsersWithSalary();
+  }
+
+  Future<void> _loadUsersWithSalary() async {
+    try {
+      final users = await _authService.getUsersWithSalary();
+      setState(() {
+        _usersWithSalary = users;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Danh sách Lương'),
+        backgroundColor: Colors.green,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Danh sách Lương',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child:
+                  _usersWithSalary.isEmpty
+                      ? const Center(child: Text('Chưa có dữ liệu lương'))
+                      : ListView.builder(
+                        itemCount: _usersWithSalary.length,
+                        itemBuilder: (context, index) {
+                          final user = _usersWithSalary[index];
+                          return Card(
+                            elevation: 2,
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            child: ListTile(
+                              title: Text(
+                                '${user['full_name'] ?? 'Chưa đặt tên'} - ${user['email'] ?? 'No email'}',
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Phòng: ${user['role'] ?? 'Chưa đặt tên'}',
+                                  ),
+                                  Text(
+                                    'Lương cơ bản: ${user['base_salary']?.toStringAsFixed(0) ?? '0'} VND',
+                                  ),
+                                  Text(
+                                    'Số ngày công: ${user['work_days'] ?? 0}',
+                                  ),
+                                  Text(
+                                    'Phạt muộn: ${user['late_penalty'] > 0 ? '200,000 VND' : '0 VND'}',
+                                  ),
+                                  Text(
+                                    'Tổng lương: ${user['total_salary']?.toStringAsFixed(0) ?? '0'} VND',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
 class pagePhongBan extends StatelessWidget {
   const pagePhongBan({super.key});
 
+  final List<Map<String, String>> _departments = const [
+    {'id': '1', 'name': 'Phòng IT'},
+    {'id': '2', 'name': 'Phòng Sale'},
+    {'id': '3', 'name': 'Phòng Marketing'},
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: Center(child: Text("Phòng ban")));
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Quản lý Phòng Ban'),
+        backgroundColor: Colors.green,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Danh sách Phòng Ban',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _departments.length,
+                itemBuilder: (context, index) {
+                  final department = _departments[index];
+                  return Card(
+                    elevation: 2,
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    child: ListTile(title: Text(department['name']!)),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
