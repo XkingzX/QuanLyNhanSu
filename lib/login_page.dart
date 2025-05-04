@@ -88,8 +88,8 @@ class LoginPage extends StatelessWidget {
           flushbarTitleSuccess: 'Thành công',
         ),
         theme: LoginTheme(
-          primaryColor: Colors.green,
-          accentColor: Colors.greenAccent,
+          primaryColor: Colors.blueAccent,
+          accentColor: Colors.lightBlueAccent,
           errorColor: Colors.red,
           cardTheme: const CardTheme(
             color: Colors.white,
@@ -107,30 +107,37 @@ class LoginPage extends StatelessWidget {
             fontSize: 18.0,
             fontWeight: FontWeight.w600,
           ),
+          // body ở trong textfield
           inputTheme: InputDecorationTheme(
             filled: true,
-            fillColor: Colors.green.withOpacity(0.1),
+            fillColor: Colors.indigoAccent.withOpacity(0.1),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
             ),
+            // màu chữ trong textfield
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.green),
+              borderSide: const BorderSide(color: Colors.indigo),
             ),
+            // màu viền textfield
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.green),
+              borderSide: const BorderSide(color: Colors.indigo),
             ),
+            // màu khi click vào textfield
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.greenAccent, width: 2),
+              borderSide: const BorderSide(
+                color: Colors.indigoAccent,
+                width: 2,
+              ),
             ),
           ),
           buttonTheme: const LoginButtonTheme(
-            backgroundColor: Colors.green,
-            highlightColor: Colors.greenAccent,
-            splashColor: Colors.greenAccent,
+            backgroundColor: Colors.indigo,
+            highlightColor: Colors.indigoAccent,
+            splashColor: Colors.indigoAccent,
             elevation: 4.0,
             highlightElevation: 6.0,
           ),
