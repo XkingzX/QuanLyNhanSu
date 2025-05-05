@@ -21,7 +21,7 @@ class AuthService {
 
       await _supabase.from('login_history').insert({
         'user_id': user.id,
-        'login_at': DateTime.now().toUtc().toIso8601String(),
+        'login_time': DateTime.now().toUtc().toIso8601String(),
       });
 
       await _supabase
