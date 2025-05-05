@@ -198,18 +198,19 @@ class _HomePageState extends State<HomePage> {
                   Navigator.pop(context);
                 },
               ),
-            ListTile(
-              leading: const Icon(
-                Icons.local_fire_department_outlined,
-                color: Colors.indigoAccent,
+            if (_isAdmin)
+              ListTile(
+                leading: const Icon(
+                  Icons.local_fire_department_outlined,
+                  color: Colors.indigoAccent,
+                ),
+                title: const Text('Phòng ban'),
+                selected: _selectedMenu == 'Phòng ban',
+                onTap: () {
+                  setState(() => _selectedMenu = 'Phòng ban');
+                  Navigator.pop(context);
+                },
               ),
-              title: const Text('Phòng ban'),
-              selected: _selectedMenu == 'Phòng ban',
-              onTap: () {
-                setState(() => _selectedMenu = 'Phòng ban');
-                Navigator.pop(context);
-              },
-            ),
           ],
         ),
       ),
