@@ -380,7 +380,7 @@ class _pageTrangChuState extends State<pageTrangChu> {
                           ),
                         ),
                         subtitle: Text(
-                          login['full_name'] ?? 'Unknown',
+                          login['full_name'] ?? 'Chưa đặt tên',
                           style: const TextStyle(fontSize: 16),
                         ),
                         trailing: AnimatedOpacity(
